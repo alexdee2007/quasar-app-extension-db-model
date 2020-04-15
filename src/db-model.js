@@ -3,7 +3,7 @@ import { pickBy, mapValues, isEqualWith, isNull, cloneDeep, assignWith, assign, 
 import { decimal, email, ipAddress, macAddress } from 'vuelidate/lib/validators';
 
 import store from 'store';
-import { API } from 'boot/axios';
+import { API } from 'db-api';
 import { joinStrings, truncDateString } from 'utils/strings';
 import { date, datetime, isArray } from 'utils/validators';
 
