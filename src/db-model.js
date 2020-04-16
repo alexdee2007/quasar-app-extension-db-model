@@ -1,5 +1,5 @@
 import Vue from 'vue';
-import { pickBy, mapValues, isEqualWith, isNull, cloneDeep, assignWith, assign, merge, flatten, difference, isEmpty } from 'lodash';
+import { pickBy, mapValues, isEqualWith, isNull, cloneDeep, assignWith, assign, merge, flatten, difference, isEmpty, map } from 'lodash';
 import { decimal, email, ipAddress, macAddress } from 'vuelidate/lib/validators';
 
 import store from 'store';
@@ -68,29 +68,29 @@ const vm = Vue.extend({
         ...this.$v,
         $touch: () => {
           this.$v.$touch();
-          Object.keys(this.$relations).map(key => {
-            if (this.$relations[key].type === 'hasMany') {
-              this[key].map(vm => vm.$validate.$touch());
+          this.$relations.map(relation => {
+            if (relation.type === 'hasMany') {
+              this[relation.name].map(vm => vm.$validate.$touch());
             } else {
-              this[key].$validate.$reset();
-              !this[key].$isClear && this[key].$validate.$touch();
+              this[relation.name].$validate.$reset();
+              !this[relation.name].$isClear && this[relation.name].$validate.$touch();
             }
           })
         },
         $reset: () => {
           this.$v.$reset();
-          Object.keys(this.$relations).map(key => {
-            if (this.$relations[key].type === 'hasMany') {
-              this[key].map(vm => vm.$validate.$reset());
+          this.$relations.map(relation => {
+            if (relation.type === 'hasMany') {
+              this[relation.name].map(vm => vm.$validate.$reset());
             } else {
-              this[key].$validate.$reset();
+              this[relation.name].$validate.$reset();
             }
           })
         },
         $flattenParams: this.$v.$flattenParams,
-        $error: this.$v.$error ? true : Object.keys(this.$relations).some(key => this.$relations[key].type === 'hasMany'
-              ? this[key].some(vm => vm.$validate.$error)
-              : !this[key].$isClear && this[key].$validate.$error)
+        $error: this.$v.$error ? true : this.$relations.some(relation => relation.type === 'hasMany'
+              ? this[relation.name].some(vm => vm.$validate.$error)
+              : !this[relation.name].$isClear && this[relation.name].$validate.$error)
       };
     },
     $jsonData() {
@@ -159,7 +159,7 @@ const vm = Vue.extend({
     // PRIVATE
 
     __clearVm() {
-      difference(this.$children, flatten(Object.keys(this.$relations).map(key => this[key])))
+      difference(this.$children, flatten(this.$relations.map(relation => this[relation.name])))
           .map(vm => vm.$destroy());
     },
     __normalizeVm(value, key) {
@@ -220,7 +220,7 @@ export default class DbModel {
   }
 
   static relations() {
-    return mapValues(pickBy(this.fields(), v => v.type === 'model'), v => ({type: v.relation, model: v.model}));
+    return map(pickBy(this.fields(), v => v.type === 'model'), (v, k) => ({type: v.relation, model: v.model, name: k}));
   }
 
   static getValue(fieldName, value) {
