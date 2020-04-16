@@ -51,6 +51,18 @@ const vm = Vue.extend({
     $relations() {
       return this.$options.relations();
     },
+    $view() {
+      let view = {name: this.$options.title, fields: []};
+      for (const key in this.$data) {
+        const field = this.$getField(key);
+        if (field.export !== false && this.$data[key] && !isEmpty(this.$data[key]) && !this.$data[key].$isEmpty) {
+          view.fields.push(field.type !== 'model' ? {label: field.label, value: this.$value[key]}
+          : field.relation === 'hasMany' ? {model: field.model, label: field.model.title, values: this.$data[key].map(vm => [{value: vm.$label, view: vm.$view}])}
+          : {model: field.model, label: field.model.title, values: [{value: this.$data[key].$label, view: this.$data[key].$view}]});
+        }
+      }
+      return view;
+    },
     $validate() {
       return {
         ...this.$v,
@@ -102,28 +114,20 @@ const vm = Vue.extend({
         this.$q.loading.show({message: 'Збереження...'});
         const data = await this.$api.model.save(this.$options.name, this.$jsonData);
         this.$q.notify({color: 'positive', timeout: 2500, message: 'Дані успішно збережно', position: 'top', icon: 'done'});
-        return data;
+        return this.$options.assignData(data);
       } catch (err) {
         throw err;
       } finally {
         this.$q.loading.hide();
       }
     },
-    async $commit(save) {
+    async $commit(saveOnCommit) {
       try {
-        await this.$nextTick(); // debounced inputs
-
-        this.$validate.$touch();
-        if (this.$validate.$error) {
-          return;
-        }
-
         let data = this.$jsonData;
-        if (save === true) {
-          data = this.$options.assignData(await this.$save());
+        if (saveOnCommit === true) {
+          data = await this.$save();
           assign(this.$data, mapValues(data, (v, k) => this.__normalizeVm(v, k)));
         }
-
         this.data = cloneDeep(data);
         this.__clearVm();
         return this;
