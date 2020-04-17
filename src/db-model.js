@@ -57,11 +57,11 @@ const vm = Vue.extend({
         const field = this.$getField(key);
         if (field.export !== false) {
           fields.push(field.type !== 'model' ? {label: field.label, value: this.$value[key], name: key}
-          : field.relation === 'hasMany' ? {model: field.model, label: field.model.title, name: key, values: this.$data[key]}
-          : (this.$data[key].$isEmpty ? {} : {model: field.model, label: field.model.title, name: key, empty: this.$data[key].$isEmpty, values: [this.$data[key]]}));
+              : field.relation === 'hasMany' ? (!this.$data[key].length ? {} : {model: field.model, label: field.model.title, name: key, values: this.$data[key]})
+              : (this.$data[key].$isEmpty ? {} : {model: field.model, label: field.model.title, name: key, values: [this.$data[key]]}));
         }
       }
-      return {name: this.$options.title, fields: fields.filter(v => v.value || v.values)};
+      return {name: this.$options.title, fields: fields.filter(v => v.value || (v.values && v.values.length))};
     },
     $validate() {
       return {
