@@ -31,10 +31,10 @@ const vm = Vue.extend({
       return !isEqualWith(this.data, this.$jsonData, equalBlank);
     },
     $isEmpty() {
-      return isEqualWith(filterId(this.$options.defaults()), filterId(this.$data), equalBlank);
+      return isEqualWith(filterId(this.$options.defaults()), filterId(this.$jsonData), equalBlank);
     },
     $isClear() {
-      return isEqualWith(this.$options.defaults(), this.$data, equalBlank);
+      return isEqualWith(this.$options.defaults(), this.$jsonData, equalBlank);
     },
     $isValid() {
       return !this.$validate.$error;
@@ -52,16 +52,16 @@ const vm = Vue.extend({
       return this.$options.relations();
     },
     $view() {
-      let view = {name: this.$options.title, fields: []};
-      for (const key in this.$data) {
+      let fields = [];
+      for (const key in this.$options.fields()) {
         const field = this.$getField(key);
-        if (field.export !== false && this.$data[key] && !isEmpty(this.$data[key]) && !this.$data[key].$isEmpty) {
-          view.fields.push(field.type !== 'model' ? {label: field.label, value: this.$value[key]}
-          : field.relation === 'hasMany' ? {model: field.model, label: field.model.title, values: this.$data[key].map(vm => [{value: vm.$label, view: vm.$view}])}
-          : {model: field.model, label: field.model.title, values: [{value: this.$data[key].$label, view: this.$data[key].$view}]});
+        if (field.export !== false) {
+          fields.push(field.type !== 'model' ? {label: field.label, value: this.$value[key], name: key}
+          : field.relation === 'hasMany' ? {model: field.model, label: field.model.title, name: key, values: this.$data[key]}
+          : (this.$data[key].$isEmpty ? {} : {model: field.model, label: field.model.title, name: key, empty: this.$data[key].$isEmpty, values: [this.$data[key]]}));
         }
       }
-      return view;
+      return {name: this.$options.title, fields: fields.filter(v => v.value || v.values)};
     },
     $validate() {
       return {
@@ -225,7 +225,8 @@ export default class DbModel {
 
   static getValue(fieldName, value) {
     const field = this.getField(fieldName);
-    return field.type === 'select' ? (field.multiple ? value.map(v => getDictValue(v, field.dict)).join(', ') : getDictValue(value, field.dict))
+    return value === null || value === '' ? value
+        : field.type === 'select' ? (field.multiple ? value.map(v => getDictValue(v, field.dict)).join(', ') : getDictValue(value, field.dict))
         : field.type === 'date' ? (field.multiple ? value.map(v => truncDateString(v)).join(', ') : truncDateString(value))
         : field.type === 'boolean' ? (field.multiple ? value.map(v => getDictValue(v ? '1' : '0', 'BOOL')).join(', ') : getDictValue(value ? '1' : '0', 'BOOL'))
         : (field.multiple ? value.join(', ') : value)
