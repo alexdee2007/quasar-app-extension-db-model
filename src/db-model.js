@@ -1,5 +1,5 @@
 import Vue from 'vue';
-import { pickBy, mapValues, isEqualWith, isNull, cloneDeep, assignWith, assign, merge, flatten, difference, isEmpty, map } from 'lodash';
+import { pickBy, mapValues, isEqualWith, isNull, cloneDeep, assignWith, assign, merge, flatten, difference, isEmpty, map, get } from 'lodash';
 import { decimal, email, ipAddress, macAddress } from 'vuelidate/lib/validators';
 
 import store from 'store';
@@ -233,7 +233,7 @@ export default class DbModel {
   }
 
   static getField(fieldName) {
-    return this.fields()[fieldName] || {};
+    return get(this.fields(), fieldName, {});
   }
 
   // VM
