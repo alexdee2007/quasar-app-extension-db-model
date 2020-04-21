@@ -94,9 +94,10 @@ const vm = Vue.extend({
       };
     },
     $jsonData() {
-      return mapValues(this.$options.fields(), (v, k) => {
-        return v.type === 'model' && v.relation === 'hasMany' ? this.$data[k].map(vm => vm.$jsonData)
-            : v.type === 'model' && v.relation === 'hasOne' ? (this.$data[k].$isClear ? {} : this.$data[k].$jsonData)
+      return mapValues(this.$data, (v, k) => {
+        const field = this.$getField(k);
+        return field.type === 'model' && field.relation === 'hasMany' ? this.$data[k].map(vm => vm.$jsonData)
+            : field.type === 'model' && field.relation === 'hasOne' ? (this.$data[k].$isClear ? {} : this.$data[k].$jsonData)
             : this.$data[k];
       });
     }
@@ -139,7 +140,7 @@ const vm = Vue.extend({
       this.$validate.$reset();
       assignWith(this.$data, filterId(this.$options.defaults()), (obj, src, key) => {
         const field = this.$getField(key);
-        return field.type === 'model' ? (field.relation === 'hasMany' ? src.slice(0) : obj.$reset()) : src;
+        return field.type === 'model' && field.relation === 'hasOne' ? obj.$reset() : src;
       });
       return this;
     },
