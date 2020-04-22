@@ -9,7 +9,7 @@ import { date, datetime, isArray } from 'utils/validators';
 
 const filterId = (obj) => pickBy(obj, (v, k) => k !== 'id');
 
-const equalBlank = (a, b) => (isNull(a) || a === '') && (isNull(b) || b === '') ? true : undefined;
+const equalBlank = (a, b) => (isNull(a) || a === '' || a === undefined) && (isNull(b) || b === '' || b === undefined) ? true : undefined;
 
 const getDictValue = (key, dict, language = 'UK') => {
   const v = store.getters.DICT(`${dict}&language=${language}`).find(v => v.key === key);
@@ -102,7 +102,6 @@ const vm = Vue.extend({
       });
     }
   },
-
   methods: {
 
     // PUBLIC
@@ -144,11 +143,19 @@ const vm = Vue.extend({
       });
       return this;
     },
-    $rollback() {
-      this.$validate.$reset();
-      assign(this.$data, mapValues(cloneDeep(this.data), (v, k) => this.__normalizeVm(v, k)));
-      this.__clearVm();
-      return this;
+    async $rollback() {
+      try {
+        this.$q.loading.show({message: 'Скасування змін...'});
+        await new Promise(r => setTimeout(r, 50));
+        this.$validate.$reset();
+        assign(this.$data, mapValues(cloneDeep(this.data), (v, k) => this.__normalizeVm(v, k)));
+        this.__clearVm();
+        return this;
+      } catch (err) {
+        throw err;
+      } finally {
+        this.$q.loading.hide();
+      }
     },
     $getValue(fieldName) {
       return this.$options.getValue(fieldName, this.data[fieldName]);
@@ -178,7 +185,7 @@ export default class DbModel {
   constructor(data, parent) {
     const  {name, title, defaults, fields, validations, defaultValidations, getValue, getField, relations, assignData} = this.constructor;
     return new vm({
-      propsData: {data: this.constructor.assignData(data)},
+      propsData: {data: Object.freeze(this.constructor.assignData(data))},
       constructor: this.constructor,
       validations: merge(validations(), defaultValidations(fields)),
       name, title, defaults, fields, getValue, getField, relations, parent, assignData,
