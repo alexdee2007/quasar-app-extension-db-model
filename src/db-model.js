@@ -28,6 +28,8 @@ const vm = Vue.extend({
 
   computed: {
     $isChanged() {
+      console.log(this.data);
+      console.log(this.$jsonData);
       return !isEqualWith(this.data, this.$jsonData, equalBlank);
     },
     $isEmpty() {
@@ -137,16 +139,17 @@ const vm = Vue.extend({
     },
     $reset() {
       this.$validate.$reset();
-      assignWith(this.$data, filterId(this.$options.defaults()), (obj, src, key) => {
-        const field = this.$getField(key);
-        return field.type === 'model' && field.relation === 'hasOne' ? obj.$reset() : src;
-      });
+      assign(this.$data, mapValues(filterId(this.$options.defaults()), (v, k) => this.__normalizeVm(v, k)));
+      /*assignWith(this.$data, filterId(this.$options.defaults()), (obj, src, key) => {
+       const field = this.$getField(key);
+       return field.type === 'model' && field.relation === 'hasOne' ? obj.$reset() : src;
+       });*/
       return this;
     },
     async $rollback() {
       try {
-        this.$q.loading.show({message: 'Скасування змін...'});
-        await new Promise(r => setTimeout(r, 50));
+        //this.$q.loading.show({message: 'Скасування змін...'});
+        // await new Promise(r => setTimeout(r, 700)); //delay
         this.$validate.$reset();
         assign(this.$data, mapValues(cloneDeep(this.data), (v, k) => this.__normalizeVm(v, k)));
         this.__clearVm();
@@ -206,6 +209,7 @@ export default class DbModel {
   }
 
   static assignData(data) {
+    //return assignWith(this.defaults(), pickBy(data, (v, k) => Object.keys(this.defaults()).indexOf(k) !== -1), (defaultValue, value, key) => {
     return assignWith(this.defaults(), data, (defaultValue, value, key) => {
       const field = this.getField(key);
       return field.type === 'date' ? (field.multiple ? value.map(v => truncDateString(v)) : truncDateString(value))
