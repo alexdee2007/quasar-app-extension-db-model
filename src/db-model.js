@@ -1,20 +1,10 @@
 import Vue from 'vue';
-import { pickBy, mapValues, isEqualWith, isNull, cloneDeep, assignWith, assign, merge, flatten, difference, isEmpty, map, get } from 'lodash';
-import { decimal, email, ipAddress, macAddress } from 'vuelidate/lib/validators';
-
-import store from 'store';
 import API from 'db-api';
+import { pickBy, mapValues, isEqualWith, cloneDeep, assignWith, assign, merge, flatten, difference, isEmpty, map, get } from 'lodash';
+import { decimal, email, ipAddress, macAddress } from 'vuelidate/lib/validators';
 import { joinStrings, truncDateString } from 'utils/strings';
 import { date, datetime, isArray } from 'utils/validators';
-
-const filterId = (obj) => pickBy(obj, (v, k) => k !== 'id');
-
-const equalBlank = (a, b) => (isNull(a) || a === '' || a === undefined) && (isNull(b) || b === '' || b === undefined) ? true : undefined;
-
-const getDictValue = (key, dict, language = 'UK') => {
-  const v = store.getters.DICT(`${dict}&language=${language}`).find(v => v.key === key);
-  return v ? v.value : key;
-}
+import {filterId, equalBlank, getDictValue, forceNextTick } from './utils';
 
 const vm = Vue.extend({
 
@@ -28,15 +18,13 @@ const vm = Vue.extend({
 
   computed: {
     $isChanged() {
-      console.log(this.data);
-      console.log(this.$jsonData);
       return !isEqualWith(this.data, this.$jsonData, equalBlank);
     },
     $isEmpty() {
-      return isEqualWith(filterId(this.$options.defaults()), filterId(this.$jsonData), equalBlank);
+      return isEqualWith(filterId(this.$options.defaults()), filterId(this.$filteredJsonData), equalBlank);
     },
     $isClear() {
-      return isEqualWith(this.$options.defaults(), this.$jsonData, equalBlank);
+      return isEqualWith(this.$options.defaults(), this.$filteredJsonData, equalBlank);
     },
     $isValid() {
       return !this.$validate.$error;
@@ -102,6 +90,9 @@ const vm = Vue.extend({
             : field.type === 'model' && field.relation === 'hasOne' ? (this.$data[k].$isClear ? {} : this.$data[k].$jsonData)
             : this.$data[k];
       });
+    },
+    $filteredJsonData() {
+      return pickBy(this.$jsonData, (v, k) => Object.keys(this.$options.defaults()).indexOf(k) !== -1);
     }
   },
   methods: {
@@ -113,7 +104,7 @@ const vm = Vue.extend({
     },
     async $save() {
       try {
-        this.$q.loading.show({message: 'Збереження...'});
+        this.$q.loading.show({message: 'Збереження...', delay: 0});
         const data = await this.$api.model.save(this.$options.name, this.$jsonData);
         this.$q.notify({color: 'positive', timeout: 2500, message: 'Дані успішно збережно', position: 'top', icon: 'done'});
         return this.$options.assignData(data);
@@ -140,16 +131,16 @@ const vm = Vue.extend({
     $reset() {
       this.$validate.$reset();
       assign(this.$data, mapValues(filterId(this.$options.defaults()), (v, k) => this.__normalizeVm(v, k)));
-      /*assignWith(this.$data, filterId(this.$options.defaults()), (obj, src, key) => {
-       const field = this.$getField(key);
-       return field.type === 'model' && field.relation === 'hasOne' ? obj.$reset() : src;
-       });*/
       return this;
     },
     async $rollback() {
       try {
-        //this.$q.loading.show({message: 'Скасування змін...'});
-        // await new Promise(r => setTimeout(r, 700)); //delay
+        this.$q.loading.show({message: 'Скасування змін...', delay: 0});
+
+        // twice since spinner render on setTimeout()
+        await forceNextTick();
+        await forceNextTick();
+
         this.$validate.$reset();
         assign(this.$data, mapValues(cloneDeep(this.data), (v, k) => this.__normalizeVm(v, k)));
         this.__clearVm();
@@ -209,7 +200,6 @@ export default class DbModel {
   }
 
   static assignData(data) {
-    //return assignWith(this.defaults(), pickBy(data, (v, k) => Object.keys(this.defaults()).indexOf(k) !== -1), (defaultValue, value, key) => {
     return assignWith(this.defaults(), data, (defaultValue, value, key) => {
       const field = this.getField(key);
       return field.type === 'date' ? (field.multiple ? value.map(v => truncDateString(v)) : truncDateString(value))
