@@ -133,16 +133,10 @@ const vm = Vue.extend({
       assign(this.$data, mapValues(filterId(this.$options.defaults()), (v, k) => this.__normalizeVm(v, k)));
       return this;
     },
-    async $rollback() {
+    $rollback() {
       try {
-        this.$q.loading.show({message: 'Скасування змін...', delay: 0});
-
-        // twice since spinner render on setTimeout()
-        await forceNextTick();
-        await forceNextTick();
-
         this.$validate.$reset();
-        assign(this.$data, mapValues(cloneDeep(this.data), (v, k) => this.__normalizeVm(v, k)));
+        assignWith(this.$data, this.data, this.__assignRollback);
         this.__clearVm();
         return this;
       } catch (err) {
@@ -169,6 +163,13 @@ const vm = Vue.extend({
       return field.type === 'model'
           ? (field.relation === 'hasMany' ? value.map(v => v instanceof Vue ? v : new field.model(v, this)) : value instanceof Vue ? value : new field.model(value, this))
           : cloneDeep(value)
+    },
+    __assignRollback(obj, src, key) {
+      const field = this.$getField(key);
+      return field.type === 'model'
+          ? field.relation === 'hasMany' ? src.map((v, k) => obj[k] instanceof Vue && isEqualWith(obj[k].$jsonData, v, equalBlank) ? obj[k] : new field.model(v, this))
+          : obj instanceof Vue && isEqualWith(obj.$jsonData, src, equalBlank) ? obj : new field.model(src, this)
+          : cloneDeep(src);
     }
   }
 
