@@ -1,10 +1,11 @@
 import Vue from 'vue';
+import { Loading, Notify } from 'quasar';
 import API from 'db-api';
 import { pickBy, mapValues, isEqualWith, cloneDeep, assignWith, assign, merge, flatten, difference, isEmpty, map, get } from 'lodash';
 import { decimal, email, ipAddress, macAddress } from 'vuelidate/lib/validators';
+import { date, datetime, isArray, getErrorLabel } from 'db-input/utils/validators';
 import { joinStrings, truncDateString } from 'utils/strings';
-import { date, datetime, isArray } from 'utils/validators';
-import {filterId, equalBlank, getDictValue, forceNextTick } from './utils';
+import { filterId, equalBlank, getDictValue } from './utils';
 
 const vm = Vue.extend({
 
@@ -53,11 +54,18 @@ const vm = Vue.extend({
       }
       return {name: this.$options.title, fields: fields.filter(v => v.value || (v.values && v.values.length))};
     },
+    $errors() {
+      return Object.keys(this.$validate).filter(key => key.charAt(0) !== "$").filter(key => this.$validate[key].$error).map(key => {
+        const field = this.$getField(key)
+        return (field.type === 'model' ? field.model.title : field.label) + '-' + getErrorLabel(this.$validate[key])
+      }).join();
+    },
     $validate() {
       return {
         ...this.$v,
         $touch: () => {
           this.$v.$touch();
+          this.$v.$error && console.warn(`Помилка валідації моделі "${this.$options.title}": ${this.$errors}`);
           this.$relations.map(relation => {
             if (relation.type === 'hasMany') {
               this[relation.name].map(vm => vm.$validate.$touch());
@@ -104,7 +112,7 @@ const vm = Vue.extend({
     },
     async $save() {
       try {
-        this.$q.loading.show({message: 'Збереження...', delay: 0});
+        this.$q.loading.show({message: 'Збереження...'});
         const data = await this.$api.model.save(this.$options.name, this.$jsonData);
         this.$q.notify({color: 'positive', timeout: 2500, message: 'Дані успішно збережно', position: 'top', icon: 'done'});
         return this.$options.assignData(data);
@@ -134,16 +142,10 @@ const vm = Vue.extend({
       return this;
     },
     $rollback() {
-      try {
-        this.$validate.$reset();
-        assignWith(this.$data, this.data, this.__assignRollback);
-        this.__clearVm();
-        return this;
-      } catch (err) {
-        throw err;
-      } finally {
-        this.$q.loading.hide();
-      }
+      this.$validate.$reset();
+      assignWith(this.$data, this.data, this.__assignRollback);
+      this.__clearVm();
+      return this;
     },
     $getValue(fieldName) {
       return this.$options.getValue(fieldName, this.data[fieldName]);
@@ -169,7 +171,7 @@ const vm = Vue.extend({
       return field.type === 'model'
           ? field.relation === 'hasMany' ? src.map((v, k) => obj[k] instanceof Vue && isEqualWith(obj[k].$jsonData, v, equalBlank) ? obj[k] : new field.model(v, this))
           : obj instanceof Vue && isEqualWith(obj.$jsonData, src, equalBlank) ? obj : new field.model(src, this)
-          : cloneDeep(src);
+          : isEqualWith(obj, src, equalBlank) ? obj : cloneDeep(src);
     }
   }
 
@@ -247,45 +249,101 @@ export default class DbModel {
 
   // DB
 
-  static async create(modelData, returnInstance) {
-    const data = await API.model.save(this.name, filterId(modelData));
-    return returnInstance ? new this(data) : data;
+  static async create(modelData) {
+    try {
+      Loading.show({message: 'Створення...'});
+      const data = await API.model.save(this.name, filterId(modelData));
+      Notify.create({color: 'positive', timeout: 2500, message: 'Запис успішно створено', position: 'top', icon: 'done'});
+      return new this(data);
+    } catch (err) {
+      throw err;
+    } finally {
+      Loading.hide();
+    }
   }
 
-  static async upsert(modelData, returnInstance) {
-    const data = await API.model.save(this.name, modelData);
-    return returnInstance ? new this(data) : data;
+  static async upsert(modelData) {
+    try {
+      Loading.show({message: 'Збереження...'});
+      const data = await API.model.save(this.name, modelData);
+      Notify.create({color: 'positive', timeout: 2500, message: 'Дані успішно збережно', position: 'top', icon: 'done'});
+      return new this(data);
+    } catch (err) {
+      throw err;
+    } finally {
+      Loading.hide();
+    }
   }
 
-  static async findById(id, returnInstance) {
-    const data = await API.model.findById(this.name, id);
-    return returnInstance ? new this(data) : data;
+  static async findById(id) {
+    try {
+      Loading.show({message: 'Завантаження...'});
+      const data = await API.model.findById(this.name, id);
+      return new this(data);
+    } catch (err) {
+      throw err;
+    } finally {
+      Loading.hide();
+    }
   }
 
-  static async findOne(filter, returnInstance) {
-    const data = await API.model.findOne(this.name, filter);
-    return returnInstance ? new this(data) : data;
+  static async findOne(filter) {
+    try {
+      Loading.show({message: 'Завантаження...'});
+      const data = await API.model.findOne(this.name, filter);
+      return new this(data);
+    } catch (err) {
+      throw err;
+    } finally {
+      Loading.hide();
+    }
   }
 
-  static async find(filter, returnInstances) {
-    const data = await API.model.find(this.name, filter);
-    return returnInstances ? data.slice(0, 100).map(v => new this(v)) : data;
+  static async find(filter) {
+    try {
+      Loading.show({message: 'Завантаження...'});
+      const data = await API.model.find(this.name, filter);
+      return data.slice(0, 100).map(v => new this(v)); // limit 100 instances
+    } catch (err) {
+      throw err;
+    } finally {
+      Loading.hide();
+    }
   }
 
   static async exists(id) {
-    return await API.model.exists(this.name, id);
+    try {
+      Loading.show({message: 'Перевірка...'});
+      return await API.model.exists(this.name, id);
+    } catch (err) {
+      throw err;
+    } finally {
+      Loading.hide();
+    }
   }
 
   static async deleteById(id) {
-    return await API.model.deleteById(this.name, id);
-  }
-
-  static async deleteByIds(ids) {
-    return await API.model.deleteByIds(this.name, ids);
+    try {
+      Loading.show({message: 'Видалення...'});
+      const data = await API.model.deleteById(this.name, id);
+      Notify.create({color: 'positive', timeout: 2500, message: 'Дані успішно видалено', position: 'top', icon: 'done'});
+      return data;
+    } catch (err) {
+      throw err;
+    } finally {
+      Loading.hide();
+    }
   }
 
   static async count(where) {
-    return await API.model.count(this.name, where);
+    try {
+      Loading.show({message: 'Підрахунок...'});
+      return await API.model.count(this.name, where);
+    } catch (err) {
+      throw err;
+    } finally {
+      Loading.hide();
+    }
   }
 
 }
