@@ -19,13 +19,13 @@ const vm = Vue.extend({
 
   computed: {
     $isChanged() {
-      return !isEqualWith(this.data, this.$jsonData, equalBlank);
+      return this.$options.state.active ? !isEqualWith(this.data, this.$jsonData, equalBlank) : false;
     },
     $isEmpty() {
-      return isEqualWith(filterId(this.$options.defaults()), filterId(this.$filteredJsonData), equalBlank);
+      return this.$options.state.active ? isEqualWith(filterId(this.$options.defaults()), filterId(this.$filteredJsonData), equalBlank) : true;
     },
     $isClear() {
-      return isEqualWith(this.$options.defaults(), this.$filteredJsonData, equalBlank);
+      return this.$options.state.active ? isEqualWith(this.$options.defaults(), this.$filteredJsonData, equalBlank) : true;
     },
     $isValid() {
       return !this.$validate.$error;
@@ -92,6 +92,7 @@ const vm = Vue.extend({
       };
     },
     $jsonData() {
+      console.log('$jsonData', this.$options.name);
       return mapValues(this.$data, (v, k) => {
         const field = this.$getField(k);
         return field.type === 'model' && field.relation === 'hasMany' ? this.$data[k].map(vm => vm.$jsonData)
@@ -126,6 +127,8 @@ const vm = Vue.extend({
       try {
         let data = this.$jsonData;
         if (saveOnCommit === true) {
+          console.log(data);
+          return false;
           data = await this.$save();
           assign(this.$data, mapValues(data, (v, k) => this.__normalizeVm(v, k)));
         }
@@ -171,7 +174,7 @@ const vm = Vue.extend({
       return field.type === 'model'
           ? field.relation === 'hasMany' ? src.map((v, k) => obj[k] instanceof Vue && isEqualWith(obj[k].$jsonData, v, equalBlank) ? obj[k] : new field.model(v, this))
           : obj instanceof Vue && isEqualWith(obj.$jsonData, src, equalBlank) ? obj : new field.model(src, this)
-          : isEqualWith(obj, src, equalBlank) ? obj : cloneDeep(src);
+          : cloneDeep(src);
     }
   }
 
@@ -186,6 +189,7 @@ export default class DbModel {
       constructor: this.constructor,
       validations: merge(validations(), defaultValidations(fields)),
       name, title, defaults, fields, getValue, getField, relations, parent, assignData,
+      state: Vue.observable({active: true}),
       ...this.setup()
     });
   }
