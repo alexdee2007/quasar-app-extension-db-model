@@ -47,18 +47,21 @@ const vm = Vue.extend({
       for (const key in this.$options.fields()) {
         const field = this.$getField(key);
         if (field.export !== false) {
-          fields.push(field.type !== 'model' ? {label: field.label, value: this.$value[key], name: key}
-          : field.relation === 'hasMany' ? (!this.$data[key].length ? {} : {model: field.model, label: field.model.title, name: key, values: this.$data[key]})
-              : (this.$data[key].$isEmpty ? {} : {model: field.model, label: field.model.title, name: key, values: [this.$data[key]]}));
+          fields.push(
+              field.type === 'model' ? (this.$data[key].$isEmpty ? {} : {model: field.model, label: field.model.title, name: key, values: [this.$data[key]]})
+              : field.type === 'models' ? (!this.$data[key].length ? {} : {model: field.model, label: field.model.title, name: key, values: this.$data[key]})
+              : {label: field.label, value: this.$value[key], name: key}
+          )
         }
       }
       return {name: this.$options.title, fields: fields.filter(v => v.value || (v.values && v.values.length))};
     },
     $errors() {
-      return Object.keys(this.$validate).filter(key => key.charAt(0) !== "$").filter(key => this.$validate[key].$error).map(key => {
-        const field = this.$getField(key)
-        return (field.type === 'model' ? field.model.title : field.label) + '-' + getErrorLabel(this.$validate[key])
-      }).join();
+      return Object.keys(this.$validate)
+          .filter(key => key.charAt(0) !== "$")
+          .filter(key => this.$validate[key].$error)
+          .map(key => `${this.$getField(key).label}-${getErrorLabel(this.$validate[key])}`)
+          .join();
     },
     $validate() {
       return {
@@ -92,11 +95,10 @@ const vm = Vue.extend({
       };
     },
     $jsonData() {
-      console.log('$jsonData', this.$options.name);
       return mapValues(this.$data, (v, k) => {
         const field = this.$getField(k);
-        return field.type === 'model' && field.relation === 'hasMany' ? this.$data[k].map(vm => vm.$jsonData)
-            : field.type === 'model' && field.relation === 'hasOne' ? (this.$data[k].$isClear ? {} : this.$data[k].$jsonData)
+        return field.type === 'model' ? (this.$data[k].$isClear ? {} : this.$data[k].$jsonData)
+            : field.type === 'models' ? this.$data[k].map(vm => vm.$jsonData)
             : this.$data[k];
       });
     },
@@ -165,15 +167,14 @@ const vm = Vue.extend({
     },
     __normalizeVm(value, key) {
       const field = this.$getField(key);
-      return field.type === 'model'
-          ? (field.relation === 'hasMany' ? value.map(v => v instanceof Vue ? v : new field.model(v, this)) : value instanceof Vue ? value : new field.model(value, this))
+      return field.type === 'model' ? (value instanceof Vue ? value : new field.model(value, this))
+          : field.type === 'models' ? value.map(v => v instanceof Vue ? v : new field.model(v, this))
           : cloneDeep(value)
     },
     __assignRollback(obj, src, key) {
       const field = this.$getField(key);
-      return field.type === 'model'
-          ? field.relation === 'hasMany' ? src.map((v, k) => obj[k] instanceof Vue && isEqualWith(obj[k].$jsonData, v, equalBlank) ? obj[k] : new field.model(v, this))
-          : obj instanceof Vue && isEqualWith(obj.$jsonData, src, equalBlank) ? obj : new field.model(src, this)
+      return field.type === 'model' ? (obj instanceof Vue && isEqualWith(obj.$jsonData, src, equalBlank) ? obj : new field.model(src, this))
+          : field.type === 'models' ? src.map((v, k) => obj[k] instanceof Vue && isEqualWith(obj[k].$jsonData, v, equalBlank) ? obj[k] : new field.model(v, this))
           : cloneDeep(src);
     }
   }
@@ -210,7 +211,8 @@ export default class DbModel {
     return assignWith(this.defaults(), data, (defaultValue, value, key) => {
       const field = this.getField(key);
       return field.type === 'date' ? (field.multiple ? value.map(v => truncDateString(v)) : truncDateString(value))
-          : field.type === 'model' ? (field.relation === 'hasMany' ? value.map(v => field.model.assignData(v)) : isEmpty(value) ? {} : field.model.assignData(value))
+          : field.type === 'model' ? (isEmpty(value) ? {} : field.model.assignData(value))
+          : field.type === 'models' ? value.map(v => field.model.assignData(v))
           : value;
     });
   }
@@ -220,7 +222,7 @@ export default class DbModel {
       return v.type === 'date' ? {date}
       : v.type === 'datetime' ? {date: datetime}
       : v.type === 'number' ? {decimal}
-      : v.type === 'model' && v.relation === 'hasMany' ? {isArray}
+      : v.type === 'models' ? {isArray}
       : v.type === 'email' ? {email}
       : v.type === 'ipAddress' ? {ipAddress}
       : v.type === 'macAddress' ? {macAddress}
@@ -229,7 +231,8 @@ export default class DbModel {
   }
 
   static relations() {
-    return map(pickBy(this.fields(), v => v.type === 'model'), (v, k) => ({type: v.relation, model: v.model, name: k}));
+    return map(pickBy(this.fields(), v => ['model', 'models'].indexOf(v.type) !== -1),
+        (v, k) => ({type: v.type === 'model' ? 'hasOne' : 'hasMany', model: v.model, name: k, label: v.label, filter: v.filter, sort: v.sort, export: v.export}));
   }
 
   static getValue(fieldName, value) {
