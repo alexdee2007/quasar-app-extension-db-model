@@ -13,6 +13,7 @@ module.exports = function (api) {
   api.compatibleWith('@quasar/app', '^1.5.0');
 
   api.extendQuasarConf(conf => conf.build.transpileDependencies.push(/quasar-app-extension-db-model[\\/]src/));
-  api.chainWebpack(chain => chain.resolve.alias.set('db-model', path.resolve(__dirname, 'db-model.js')));
+  api.chainWebpack(chain => chain.resolve.alias.set('db-model$', path.resolve(__dirname, 'db-model.js')));
+  api.chainWebpack(chain => chain.resolve.alias.set('db-model', path.resolve(__dirname)));
 
 }

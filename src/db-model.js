@@ -118,6 +118,7 @@ const vm = Vue.extend({
         this.$q.loading.show({message: 'Збереження...'});
         const data = await this.$api.model.save(this.$options.name, this.$jsonData);
         this.$q.notify({color: 'positive', timeout: 2500, message: 'Дані успішно збережно', position: 'top', icon: 'done'});
+        this.$emit('save');
         return this.$options.assignData(data);
       } catch (err) {
         throw err;
@@ -136,6 +137,7 @@ const vm = Vue.extend({
         }
         this.data = cloneDeep(data);
         this.__clearVm();
+        this.$emit('commit');
         return this;
       } catch (err) {
         console.error(err);
@@ -144,12 +146,14 @@ const vm = Vue.extend({
     $reset() {
       this.$validate.$reset();
       assign(this.$data, mapValues(filterId(this.$options.defaults()), (v, k) => this.__normalizeVm(v, k)));
+      this.$emit('reset');
       return this;
     },
     $rollback() {
       this.$validate.$reset();
       assignWith(this.$data, this.data, this.__assignRollback);
       this.__clearVm();
+      this.$emit('rollback');
       return this;
     },
     $getValue(fieldName) {
