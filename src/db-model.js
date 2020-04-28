@@ -25,6 +25,7 @@ const vm = Vue.extend({
       return this.$options.state.active ? isEqualWith(filterId(this.$options.defaults()), filterId(this.$filteredJsonData), equalBlank) : true;
     },
     $isClear() {
+      // console.log(this.$options.name, isEqualWith(this.$options.defaults(), this.$filteredJsonData, equalBlank), this.$options.defaults(), this.$filteredJsonData);
       return this.$options.state.active ? isEqualWith(this.$options.defaults(), this.$filteredJsonData, equalBlank) : true;
     },
     $isValid() {
@@ -73,8 +74,9 @@ const vm = Vue.extend({
             if (relation.type === 'hasMany') {
               this[relation.name].map(vm => vm.$validate.$touch());
             } else {
-              this[relation.name].$validate.$reset();
-              !this[relation.name].$isClear && this[relation.name].$validate.$touch();
+              if (!this[relation.name].$isClear || get(this.$validate, `${relation.name}.required`) === false) {
+                this[relation.name].$validate.$touch();
+              }
             }
           })
         },
