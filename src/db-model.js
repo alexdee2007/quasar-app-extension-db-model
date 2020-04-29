@@ -74,9 +74,7 @@ const vm = Vue.extend({
             if (relation.type === 'hasMany') {
               this[relation.name].map(vm => vm.$validate.$touch());
             } else {
-              if (!this[relation.name].$isClear || get(this.$validate, `${relation.name}.required`) === false) {
-                this[relation.name].$validate.$touch();
-              }
+              (!this[relation.name].$isClear || get(this.$validate, `${relation.name}.required`) === false) && this[relation.name].$validate.$touch();
             }
           })
         },
@@ -93,7 +91,7 @@ const vm = Vue.extend({
         $flattenParams: this.$v.$flattenParams,
         $error: this.$v.$error ? true : this.$relations.some(relation => relation.type === 'hasMany'
               ? this[relation.name].some(vm => vm.$validate.$error)
-              : !this[relation.name].$isClear && this[relation.name].$validate.$error)
+              : this[relation.name].$validate.$error)
       };
     },
     $jsonData() {
@@ -132,13 +130,14 @@ const vm = Vue.extend({
       try {
         let data = this.$jsonData;
         if (saveOnCommit === true) {
-          console.log(data);
+          console.log('saveOnCommit', data);
           return false;
           data = await this.$save();
           assign(this.$data, mapValues(data, (v, k) => this.__normalizeVm(v, k)));
         }
         this.data = cloneDeep(data);
         this.__clearVm();
+        this.$children.map(vm => vm.$isChanged && vm.$commit());
         this.$emit('commit');
         return this;
       } catch (err) {
