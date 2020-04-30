@@ -1,10 +1,10 @@
 import Vue from 'vue';
 import { Loading, Notify } from 'quasar';
 import API from 'db-api';
-import { pickBy, mapValues, isEqualWith, cloneDeep, assignWith, assign, merge, flatten, difference, isEmpty, map, get } from 'lodash';
+import { pick, pickBy, mapValues, isEqualWith, cloneDeep, assignWith, assign, merge, flatten, difference, isEmpty, map, get } from 'lodash';
 import { decimal, email, ipAddress, macAddress } from 'vuelidate/lib/validators';
 import { date, datetime, isArray, getErrorLabel } from 'db-input/utils/validators';
-import { filterId, equalBlank, getDictValue, joinStrings, truncDateString } from './utils';
+import { filterServiceFields, equalBlank, getDictValue, joinStrings, truncDateString } from './utils';
 
 const vm = Vue.extend({
 
@@ -18,14 +18,11 @@ const vm = Vue.extend({
 
   computed: {
     $isChanged() {
+      console.log('$isChanged', this.$options.name, !isEqualWith(this.data, this.$jsonData, equalBlank), this.data, this.$jsonData)
       return this.$options.state.active ? !isEqualWith(this.data, this.$jsonData, equalBlank) : false;
     },
     $isEmpty() {
-      return this.$options.state.active ? isEqualWith(filterId(this.$options.defaults()), filterId(this.$filteredJsonData), equalBlank) : true;
-    },
-    $isClear() {
-      // console.log(this.$options.name, isEqualWith(this.$options.defaults(), this.$filteredJsonData, equalBlank), this.$options.defaults(), this.$filteredJsonData);
-      return this.$options.state.active ? isEqualWith(this.$options.defaults(), this.$filteredJsonData, equalBlank) : true;
+      return this.$options.state.active ? isEqualWith(this.$ownDefaults, pick(this.$jsonData, Object.keys(this.$ownDefaults)), equalBlank) : true;
     },
     $isValid() {
       return !this.$validate.$error;
@@ -73,7 +70,7 @@ const vm = Vue.extend({
             if (relation.type === 'hasMany') {
               this[relation.name].map(vm => vm.$validate.$touch());
             } else {
-              (!this[relation.name].$isClear || get(this.$validate, `${relation.name}.required`) === false) && this[relation.name].$validate.$touch();
+              (!this[relation.name].$isEmpty || get(this.$validate, `${relation.name}.required`) === false) && this[relation.name].$validate.$touch();
             }
           })
         },
@@ -96,13 +93,16 @@ const vm = Vue.extend({
     $jsonData() {
       return mapValues(this.$data, (v, k) => {
         const field = this.$getField(k);
-        return field.type === 'model' ? (this.$data[k].$isClear ? {} : this.$data[k].$jsonData)
+        return field.type === 'model' ? (this.$data[k].$isEmpty ? {} : this.$data[k].$jsonData)
             : field.type === 'models' ? this.$data[k].map(vm => vm.$jsonData)
             : this.$data[k];
       });
     },
-    $filteredJsonData() {
-      return pickBy(this.$jsonData, (v, k) => Object.keys(this.$options.defaults()).indexOf(k) !== -1);
+    $ownDefaults() {
+      return filterServiceFields(this.$options.defaults());
+    },
+    $ownJsonData() {
+      return filterServiceFields(this.$jsonData);
     }
   },
   methods: {
@@ -129,8 +129,6 @@ const vm = Vue.extend({
       try {
         let data = this.$jsonData;
         if (saveOnCommit === true) {
-          console.log('saveOnCommit', data);
-          return false;
           data = await this.$save();
           assign(this.$data, mapValues(data, (v, k) => this.__normalizeVm(v, k)));
         }
@@ -145,7 +143,7 @@ const vm = Vue.extend({
     },
     $reset() {
       this.$validate.$reset();
-      assign(this.$data, mapValues(filterId(this.$options.defaults()), (v, k) => this.__normalizeVm(v, k)));
+      assign(this.$data, mapValues(this.$ownDefaults, (v, k) => this.__normalizeVm(v, k)));
       this.$emit('reset');
       return this;
     },
@@ -263,7 +261,7 @@ export default class DbModel {
   static async create(modelData) {
     try {
       Loading.show({message: 'Створення...'});
-      const data = await API.model.save(this.name, filterId(modelData));
+      const data = await API.model.save(this.name, filterServiceFields(modelData));
       Notify.create({color: 'positive', timeout: 2500, message: 'Запис успішно створено', position: 'top', icon: 'done'});
       return new this(data);
     } catch (err) {

@@ -1,8 +1,9 @@
 import moment from 'moment';
-import { pickBy, isNull, mapValues, keyBy } from 'lodash';
+import { omit, pickBy, isNull, mapValues, keyBy } from 'lodash';
 import store from 'store';
+import { fields } from './service-fields';
 
-export const filterId = (obj) => pickBy(obj, (v, k) => k !== 'id');
+export const filterServiceFields = (obj) => omit(obj, Object.keys(fields));
 
 export const equalBlank = (a, b) => (isNull(a) || a === '') && (isNull(b) || b === '') ? true : undefined;
 
@@ -10,6 +11,8 @@ export const getDictValue = (key, dict, language = 'UK') => {
   const v = store.getters.DICT(`${dict}&language=${language}`).find(v => v.key === key);
   return v ? v.value : key;
 }
+
+export const pickData = (data, model) => pickBy(data, (v, k) => Object.keys(model.defaults()).indexOf(k) !== -1 && data[k] !== model.defaults()[k]);
 
 export const forceNextTick = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 
