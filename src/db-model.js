@@ -18,11 +18,10 @@ const vm = Vue.extend({
 
   computed: {
     $isChanged() {
-      console.log('$isChanged', this.$options.name, !isEqualWith(this.data, this.$jsonData, equalBlank), this.data, this.$jsonData)
       return this.$options.state.active ? !isEqualWith(this.data, this.$jsonData, equalBlank) : false;
     },
     $isEmpty() {
-      return this.$options.state.active ? isEqualWith(this.$ownDefaults, pick(this.$jsonData, Object.keys(this.$ownDefaults)), equalBlank) : true;
+      return this.$options.state.active ? isEqualWith(this.$ownDefaults, this.$ownJsonData, equalBlank) : true;
     },
     $isValid() {
       return !this.$validate.$error;
@@ -102,7 +101,7 @@ const vm = Vue.extend({
       return filterServiceFields(this.$options.defaults());
     },
     $ownJsonData() {
-      return filterServiceFields(this.$jsonData);
+      return pick(this.$jsonData, Object.keys(this.$ownDefaults));
     }
   },
   methods: {

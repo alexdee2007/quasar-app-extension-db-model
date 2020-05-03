@@ -1,5 +1,5 @@
 import moment from 'moment';
-import { omit, pickBy, isNull, mapValues, keyBy } from 'lodash';
+import { omit, pick, isNull, mapValues, keyBy, isEqualWith } from 'lodash';
 import store from 'store';
 import { fields } from './service-fields';
 
@@ -12,7 +12,10 @@ export const getDictValue = (key, dict, language = 'UK') => {
   return v ? v.value : key;
 }
 
-export const pickData = (data, model) => pickBy(data, (v, k) => Object.keys(model.defaults()).indexOf(k) !== -1 && data[k] !== model.defaults()[k]);
+export const pickData = (data, model) => {
+  const pickedData = pick(data, Object.keys(model.defaults()));
+  return isEqualWith(filterServiceFields(pickedData), filterServiceFields(model.defaults()), equalBlank) ? {} : pickedData;
+};
 
 export const forceNextTick = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 
