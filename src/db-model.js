@@ -121,7 +121,6 @@ const vm = Vue.extend({
       try {
         let data = this.$jsonData;
         if (saveOnCommit === true) {
-          return;
           data = await this.$save();
           assign(this.$data, mapValues(data, (v, k) => this.__normalizeVm(v, k)));
         }
