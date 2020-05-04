@@ -23,12 +23,6 @@ const vm = Vue.extend({
     $isEmpty() {
       return this.$options.state.active ? isEqualWith(this.$ownDefaults, this.$ownJsonData, equalBlank) : true;
     },
-    $isValid() {
-      return !this.$validate.$error;
-    },
-    $isDirty() {
-      return this.$validate.$dirty;
-    },
     $label() {
       return this.$options.title;
     },
@@ -53,41 +47,19 @@ const vm = Vue.extend({
       return {name: this.$options.title, fields: fields.filter(v => v.value || (v.values && v.values.length))};
     },
     $errors() {
-      return Object.keys(this.$validate)
+      return Object.keys(this.$v)
           .filter(key => key.charAt(0) !== "$")
-          .filter(key => this.$validate[key].$error)
-          .map(key => `${this.$getField(key).label}-${getErrorLabel(this.$validate[key])}`)
+          .filter(key => this.$v[key].$error)
+          .map(key => `${this.$getField(key).label}-${getErrorLabel(this.$v[key])}`)
           .join();
     },
-    $validate() {
-      return {
-        ...this.$v,
-        $touch: () => {
-          this.$v.$touch();
-          this.$v.$error && console.warn(`Помилка валідації моделі "${this.$options.title}": ${this.$errors}`);
-          this.$relations.map(relation => {
-            if (relation.type === 'hasMany') {
-              this[relation.name].map(vm => vm.$validate.$touch());
-            } else {
-              (!this[relation.name].$isEmpty || get(this.$validate, `${relation.name}.required`) === false) && this[relation.name].$validate.$touch();
-            }
-          })
-        },
-        $reset: () => {
-          this.$v.$reset();
-          this.$relations.map(relation => {
-            if (relation.type === 'hasMany') {
-              this[relation.name].map(vm => vm.$validate.$reset());
-            } else {
-              this[relation.name].$validate.$reset();
-            }
-          })
-        },
-        $flattenParams: this.$v.$flattenParams,
-        $error: this.$v.$error ? true : this.$relations.some(relation => relation.type === 'hasMany'
-              ? this[relation.name].some(vm => vm.$validate.$error)
-              : this[relation.name].$validate.$error)
-      };
+    $isDirty() {
+      return this.$v.$dirty;
+    },
+    $hasErrors() {
+      return this.$v.$error ? true : this.$relations.some(relation => relation.type === 'hasMany'
+            ? this[relation.name].some(vm => vm.$v.$error)
+            : this[relation.name].$v.$error)
     },
     $jsonData() {
       return mapValues(this.$data, (v, k) => {
@@ -108,6 +80,27 @@ const vm = Vue.extend({
 
     // PUBLIC
 
+    $validate() {
+      this.$v.$touch();
+      this.$v.$error && console.warn(`Помилка валідації моделі "${this.$options.title}": ${this.$errors}`);
+      this.$relations.map(relation => {
+        if (relation.type === 'hasMany') {
+          this[relation.name].map(vm => vm.$v.$touch());
+        } else {
+          (!this[relation.name].$isEmpty || get(this.$v, `${relation.name}.required`) === false) && this[relation.name].$v.$touch();
+        }
+      })
+    },
+    $resetValidation() {
+      this.$v.$reset();
+      this.$relations.map(relation => {
+        if (relation.type === 'hasMany') {
+          this[relation.name].map(vm => vm.$v.$reset());
+        } else {
+          this[relation.name].$v.$reset();
+        }
+      })
+    },
     $toJSON() {
       return this.$jsonData;
     },
@@ -128,6 +121,7 @@ const vm = Vue.extend({
       try {
         let data = this.$jsonData;
         if (saveOnCommit === true) {
+          return;
           data = await this.$save();
           assign(this.$data, mapValues(data, (v, k) => this.__normalizeVm(v, k)));
         }
@@ -141,13 +135,13 @@ const vm = Vue.extend({
       }
     },
     $reset() {
-      this.$validate.$reset();
+      this.$resetValidation();
       assign(this.$data, mapValues(this.$ownDefaults, (v, k) => this.__normalizeVm(v, k)));
       this.$emit('reset');
       return this;
     },
     $rollback() {
-      this.$validate.$reset();
+      this.$resetValidation();
       assignWith(this.$data, this.data, this.__assignRollback);
       this.__clearVm();
       this.$emit('rollback');
