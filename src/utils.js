@@ -8,7 +8,7 @@ export const filterServiceFields = (obj) => omit(obj, Object.keys(fields));
 export const equalBlank = (a, b) => (isNull(a) || a === '') && (isNull(b) || b === '') ? true : undefined;
 
 export const getDictValue = (key, dict, language = 'UK') => {
-  const v = store.getters.DICT(`${dict}&language=${language}`).find(v => v.key === key);
+  const v = store.getters.DICT(`${dict},${language}`).find(v => v.key === key);
   return v ? v.value : key;
 }
 
